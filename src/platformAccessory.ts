@@ -21,6 +21,7 @@ export class HomebridgeWizLight {
   private currentState = {
     On: false,
     Brightness: 100,
+    Temperature: 140,
   };
 
   public callbackFn?: (data: any) => void;
@@ -59,8 +60,8 @@ export class HomebridgeWizLight {
 
     // register handlers for the Brightness Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.ColorTemperature)
-      .on('set', this.getTemperature.bind(this))                // SET - bind to the `setOn` method below
-      .on('get', this.getBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
+      .on('set', this.setTemperature.bind(this))                // SET - bind to the `setOn` method below
+      .on('get', this.getTemperature.bind(this));       // SET - bind to the 'setBrightness` method below
 
 
     // /**
@@ -191,6 +192,61 @@ export class HomebridgeWizLight {
     });
   }
 
+  /**
+   * Handle "SET" requests from HomeKit
+   * These are sent when the user changes the state of an accessory, for example, changing the Temperature
+   */
+  setTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    // implement your own code to set the temperature
+    this.currentState.Temperature = value as number;
+
+    this.platform.log.debug('Set Characteristic Temperature -> ', value);
+
+    this.request('setPilot', { temp: this.tempToCalvin(this.currentState.Temperature) }, (response) => {
+      // you must call the callback function
+      callback(null);
+    });
+  }
+
+  /**
+   * Handle "SET" requests from HomeKit
+   * These are sent when the user changes the state of an accessory, for example, changing the Temperature
+   */
+  getTemperature(callback: CharacteristicGetCallback) {
+
+    // implement your own code to set the temperature
+    const value = this.currentState.Temperature;
+
+    this.platform.log.debug('Get Characteristic Temperature -> ', value);
+
+    this.request('getPilot', {}, (response) => {
+      this.currentState.Temperature = this.calvinToTemp(parseInt(response.result.temp));
+
+
+      // you must call the callback function
+      // the first argument should be null if there were no errors
+      // the second argument should be the value to return
+      callback(null, this.currentState.Temperature);
+    });
+  }
+
+  // Calvin = 2700, 6500
+  // Temp   =  140, 500
+  tempToCalvin(temp) {
+    const total = 500 - 140;
+    const current = temp - 140;
+    const p = 1 - (current / total);
+    return Math.round(2700 + ((6500 - 2700) * p));
+  }
+
+  calvinToTemp(calvin) {
+    const total = 6500 - 2700;
+    const current = calvin - 2700;
+    const p = current / total;
+    return Math.round(140 + ((500 - 140) * p));
+  }
+
   request(method, params, callback) {
 
     const client = udp.createSocket('udp4');
@@ -208,12 +264,13 @@ export class HomebridgeWizLight {
       this.platform.log.debug('Retrieved from bulb ', JSON.parse(message.toString()));
 
       callback(JSON.parse(message.toString()));
-      // client.close();
+      setTimeout(() => client.close(), 0);
     });
 
     client.send(bufferData, 38899, ip, (error) => {
       // client.close();
       if (error) {
+        client.close();
         throw error;
       }
     });
