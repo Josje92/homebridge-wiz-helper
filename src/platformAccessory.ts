@@ -2,8 +2,6 @@ import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallb
 
 import { HomebridgeWizHelper } from './platform';
 
-import buffer from 'buffer';
-
 import udp from 'dgram';
 
 
@@ -23,8 +21,6 @@ export class HomebridgeWizLight {
     Brightness: 100,
     Temperature: 140,
   };
-
-  public callbackFn?: (data: any) => void;
 
   constructor(
     private readonly platform: HomebridgeWizHelper,
@@ -63,48 +59,6 @@ export class HomebridgeWizLight {
       .on('set', this.setTemperature.bind(this))                // SET - bind to the `setOn` method below
       .on('get', this.getTemperature.bind(this));       // SET - bind to the 'setBrightness` method below
 
-
-    // /**
-    //  * Creating multiple services of the same type.
-    //  *
-    //  * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-    //  * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-    //  * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-    //  *
-    //  * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-    //  * can use the same sub type id.)
-    //  */
-    //
-    // // Example: add two "motion sensor" services to the accessory
-    // const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
-    //
-    // const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
-    //
-    // /**
-    //  * Updating characteristics values asynchronously.
-    //  *
-    //  * Example showing how to update the state of a Characteristic asynchronously instead
-    //  * of using the `on('get')` handlers.
-    //  * Here we change update the motion sensor trigger states on and off every 10 seconds
-    //  * the `updateCharacteristic` method.
-    //  *
-    //  */
-    // let motionDetected = false;
-    // setInterval(() => {
-    //   // EXAMPLE - inverse the trigger
-    //   motionDetected = !motionDetected;
-    //
-    //   // push the new value to HomeKit
-    //   motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-    //   motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-    //
-    //   this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-    //   this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    // }, 10000);
-
-
   }
 
   /**
@@ -116,7 +70,7 @@ export class HomebridgeWizLight {
     this.platform.log.debug('Set Characteristic On ->', value);
 
 
-    this.request('setPilot', { state : value }, (response) => {
+    this.request('setPilot', { state : value }, () => {
       this.currentState.On = value as boolean;
       callback(null);
     });
@@ -164,7 +118,7 @@ export class HomebridgeWizLight {
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
 
-    this.request('setPilot', { dimming: this.currentState.Brightness }, (response) => {
+    this.request('setPilot', { dimming: this.currentState.Brightness }, () => {
       // you must call the callback function
       callback(null);
     });
@@ -203,7 +157,7 @@ export class HomebridgeWizLight {
 
     this.platform.log.debug('Set Characteristic Temperature -> ', value);
 
-    this.request('setPilot', { temp: this.tempToCalvin(this.currentState.Temperature) }, (response) => {
+    this.request('setPilot', { temp: this.tempToCalvin(this.currentState.Temperature) }, () => {
       // you must call the callback function
       callback(null);
     });
@@ -260,7 +214,7 @@ export class HomebridgeWizLight {
     const ip = this.accessory.context.device.ip;
 
 
-    client.on('message', (message, remote) => {
+    client.on('message', (message) => {
       this.platform.log.debug('Retrieved from bulb ', JSON.parse(message.toString()));
 
       callback(JSON.parse(message.toString()));
