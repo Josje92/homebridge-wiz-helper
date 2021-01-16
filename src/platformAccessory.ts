@@ -1,34 +1,40 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 
-import { ExampleHomebridgePlatform } from './platform';
+import { HomebridgeWizHelper } from './platform';
+
+import buffer from 'buffer';
+
+import udp from 'dgram';
+
 
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class ExamplePlatformAccessory {
+export class HomebridgeWizLight {
   private service: Service;
 
   /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
+   * The currentstate object
    */
-  private exampleStates = {
+  private currentState = {
     On: false,
     Brightness: 100,
   };
 
+  public callbackFn?: (data: any) => void;
+
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: HomebridgeWizHelper,
     private readonly accessory: PlatformAccessory,
   ) {
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'WiZ')
+      .setCharacteristic(this.platform.Characteristic.Model, 'ESP14_SHTW1C_01');
+    // .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
 
     // get the LightBulb service if it exists, otherwise create a new LightBulb service
     // you can create multiple services for each accessory
@@ -48,48 +54,56 @@ export class ExamplePlatformAccessory {
 
     // register handlers for the Brightness Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
+      .on('set', this.setBrightness.bind(this))                // SET - bind to the `setOn` method below
+      .on('get', this.getBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
+
+    // register handlers for the Brightness Characteristic
+    this.service.getCharacteristic(this.platform.Characteristic.ColorTemperature)
+      .on('set', this.getTemperature.bind(this))                // SET - bind to the `setOn` method below
+      .on('get', this.getBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
 
 
-    /**
-     * Creating multiple services of the same type.
-     * 
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     * 
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
-     */
+    // /**
+    //  * Creating multiple services of the same type.
+    //  *
+    //  * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
+    //  * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
+    //  * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
+    //  *
+    //  * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
+    //  * can use the same sub type id.)
+    //  */
+    //
+    // // Example: add two "motion sensor" services to the accessory
+    // const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
+    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
+    //
+    // const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
+    //   this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
+    //
+    // /**
+    //  * Updating characteristics values asynchronously.
+    //  *
+    //  * Example showing how to update the state of a Characteristic asynchronously instead
+    //  * of using the `on('get')` handlers.
+    //  * Here we change update the motion sensor trigger states on and off every 10 seconds
+    //  * the `updateCharacteristic` method.
+    //  *
+    //  */
+    // let motionDetected = false;
+    // setInterval(() => {
+    //   // EXAMPLE - inverse the trigger
+    //   motionDetected = !motionDetected;
+    //
+    //   // push the new value to HomeKit
+    //   motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
+    //   motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
+    //
+    //   this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
+    //   this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
+    // }, 10000);
 
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
 
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
-
-    /**
-     * Updating characteristics values asynchronously.
-     * 
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     * 
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
-
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
   }
 
   /**
@@ -98,22 +112,22 @@ export class ExamplePlatformAccessory {
    */
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
-
     this.platform.log.debug('Set Characteristic On ->', value);
 
-    // you must call the callback function
-    callback(null);
+
+    this.request('setPilot', { state : value }, (response) => {
+      this.currentState.On = value as boolean;
+      callback(null);
+    });
   }
 
   /**
    * Handle the "GET" requests from HomeKit
    * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   * 
+   *
    * GET requests should return as fast as possbile. A long delay here will result in
    * HomeKit being unresponsive and a bad user experience in general.
-   * 
+   *
    * If your device takes time to respond you should update the status of your device
    * asynchronously instead using the `updateCharacteristic` method instead.
 
@@ -123,14 +137,19 @@ export class ExamplePlatformAccessory {
   getOn(callback: CharacteristicGetCallback) {
 
     // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
+    const isOn = this.currentState.On;
 
     this.platform.log.debug('Get Characteristic On ->', isOn);
 
-    // you must call the callback function
-    // the first argument should be null if there were no errors
-    // the second argument should be the value to return
-    callback(null, isOn);
+    this.request('getPilot', {}, (response) => {
+      this.currentState.On = response.result.state;
+
+
+      // you must call the callback function
+      // the first argument should be null if there were no errors
+      // the second argument should be the value to return
+      callback(null, response.result.state);
+    });
   }
 
   /**
@@ -140,12 +159,63 @@ export class ExamplePlatformAccessory {
   setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+    this.currentState.Brightness = value as number;
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
 
-    // you must call the callback function
-    callback(null);
+    this.request('setPilot', { dimming: this.currentState.Brightness }, (response) => {
+      // you must call the callback function
+      callback(null);
+    });
   }
 
+  /**
+   * Handle "SET" requests from HomeKit
+   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
+   */
+  getBrightness(callback: CharacteristicGetCallback) {
+
+    // implement your own code to set the brightness
+    const value = this.currentState.Brightness;
+
+    this.platform.log.debug('Get Characteristic Brightness -> ', value);
+
+    this.request('getPilot', {}, (response) => {
+      this.currentState.Brightness = response.result.dimming;
+
+
+      // you must call the callback function
+      // the first argument should be null if there were no errors
+      // the second argument should be the value to return
+      callback(null, response.result.dimming);
+    });
+  }
+
+  request(method, params, callback) {
+
+    const client = udp.createSocket('udp4');
+
+    //'{"method":"setPilot","params":{"state":true}}'
+    const bufferData = Buffer.from(JSON.stringify({
+      method,
+      params,
+    }));
+
+    const ip = this.accessory.context.device.ip;
+
+
+    client.on('message', (message, remote) => {
+      this.platform.log.debug('Retrieved from bulb ', JSON.parse(message.toString()));
+
+      callback(JSON.parse(message.toString()));
+      // client.close();
+    });
+
+    client.send(bufferData, 38899, ip, (error) => {
+      // client.close();
+      if (error) {
+        throw error;
+      }
+    });
+  }
 }

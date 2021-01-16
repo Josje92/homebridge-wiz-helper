@@ -1,4 +1,14 @@
 
+# Homebridge Platform Plugin Template
+
+This makes use of the following UDP
+```
+echo '{"method":"setPilot","params":{"state":true}}' | nc -u -w 1 [LIGHT-IP] 38899
+```
+
+For now this is only for personal use only.
+
+
 <p align="center">
 
 <img src="https://github.com/homebridge/branding/raw/master/logos/homebridge-wordmark-logo-vertical.png" width="150">
