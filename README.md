@@ -1,3 +1,7 @@
+w
+l
+dab
+m
 
 # Homebridge Platform Plugin Template
 
